@@ -95,39 +95,75 @@ with r2:
         st.write(f"🛒 Spesa: {v_cib*p_m:.2f} €")
         st.write(f"🔌 Bollette: {(v_ele+v_met+v_acq+v_int+v_tar)*p_m:.2f} €")
 
-# 7. SALVATAGGIO (Versione Blindata per errore 400)
+# --- 7. SALVATAGGIO ---
 st.write("")
-if st.button("🚀 SALVA DATI SU GOOGLE SHEETS", use_container_width=True):
-    # Creiamo un dizionario pulito
-    dati_da_salvare = {
-        "Data": datetime.now().strftime("%d/%m/%Y"),
-        "Anno": int(sel_anno), 
-        "Mese": str(sel_mese),
-        "Spese_Tot": float(tot_spese), 
-        "Quota_P": float(q_p), 
-        "Quota_M": float(q_m)
-    }
-    
-    nuova_riga = pd.DataFrame([dati_da_salvare])
-    
+col_btn1, col_btn2 = st.columns([2, 1])
+
+with col_btn1:
+    if st.button("🚀 SALVA DATI SU GOOGLE SHEETS", use_container_width=True):
+        try:
+            # Recupero dati attuali
+            existing_data = conn.read(spreadsheet=url, worksheet="Dati")
+            
+            # Prepariamo la nuova riga in modo ultra-pulito
+            nuova_riga = pd.DataFrame([{
+                "Data": str(datetime.now().strftime("%d/%m/%Y")),
+                "Anno": int(sel_anno), 
+                "Mese": str(sel_mese),
+                "Spese_Tot": round(float(tot_spese), 2), 
+                "Quota_P": round(float(q_p), 2), 
+                "Quota_M": round(float(q_m), 2)
+            }])
+
+            # Forza l'ordine delle colonne
+            cols = ["Data", "Anno", "Mese", "Spese_Tot", "Quota_P", "Quota_M"]
+            nuova_riga = nuova_riga[cols]
+
+            if existing_data is not None and not existing_data.empty:
+                # Se ci sono dati, concatena assicurandosi che le colonne combacino
+                updated_df = pd.concat([existing_data[cols], nuova_riga], ignore_index=True)
+            else:
+                updated_df = nuova_riga
+
+            # Aggiornamento
+            conn.update(spreadsheet=url, worksheet="Dati", data=updated_df)
+            st.balloons()
+            st.success(f"Dati di {sel_mese} salvati correttamente!")
+            
+        except Exception as e:
+            st.error(f"Errore 400 persistente. Prova a premere il tasto 'Reset Intestazioni' a destra.")
+            st.info(f"Dettaglio tecnico: {e}")
+
+with col_btn2:
+    # TASTO DI EMERGENZA PER RESETTARE IL FOGLIO
+    if st.button("⚠️ Reset Intestazioni", help="Usa questo se ricevi Errore 400"):
+        try:
+            # Crea un foglio vuoto con solo le intestazioni corrette
+            df_reset = pd.DataFrame(columns=["Data", "Anno", "Mese", "Spese_Tot", "Quota_P", "Quota_M"])
+            conn.update(spreadsheet=url, worksheet="Dati", data=df_reset)
+            st.warning("Foglio resettato con le intestazioni corrette! Ora prova a salvare di nuovo.")
+        except Exception as e:
+            st.error(f"Impossibile resettare: {e}")
+
+# --- 8. ANALISI STORICA ---
+st.divider()
+if st.checkbox("💾 Visualizza Analisi Storica"):
     try:
-        # Legge i dati esistenti
-        existing_data = conn.read(spreadsheet=url, worksheet="Dati")
-        
-        # Se il foglio è vuoto o ha colonne diverse, ricreiamo il DataFrame
-        if existing_data.empty:
-            updated_df = nuova_riga
+        df_history = conn.read(spreadsheet=url, worksheet="Dati")
+        if df_history is not None and not df_history.empty:
+            # (Mantieni qui il codice del grafico che abbiamo scritto prima...)
+            st.write("### 📈 Andamento Mensile")
+            fig_history = go.Figure()
+            fig_history.add_trace(go.Bar(x=df_history['Mese']+" "+df_history['Anno'].astype(str), y=df_history['Quota_P'], name='Pierpaolo', marker_color='#1f77b4'))
+            fig_history.add_trace(go.Bar(x=df_history['Mese']+" "+df_history['Anno'].astype(str), y=df_history['Quota_M'], name='Martina', marker_color='#d62728'))
+            fig_history.add_trace(go.Scatter(x=df_history['Mese']+" "+df_history['Anno'].astype(str), y=df_history['Spese_Tot'], name='Totale', line=dict(color='#2ca02c', width=3)))
+            fig_history.update_layout(barmode='group')
+            st.plotly_chart(fig_history, width="stretch")
+            st.dataframe(df_history, width="stretch")
         else:
-            updated_df = pd.concat([existing_data, nuova_riga], ignore_index=True)
-        
-        # Carica il file aggiornato
-        conn.update(spreadsheet=url, worksheet="Dati", data=updated_df)
-        
-        st.balloons()
-        st.success(f"Dati di {sel_mese} salvati!")
-    except Exception as e:
-        st.error(f"Errore 400? Controlla che le intestazioni sul foglio Google siano: Data, Anno, Mese, Spese_Tot, Quota_P, Quota_M")
-        st.info(f"Dettaglio errore: {e}")
+            st.info("Storico vuoto.")
+    except:
+        st.warning("Storico non disponibile.")
 
 # 8. ANALISI STORICA E GRAFICO COMBINATO
 st.divider()
@@ -176,5 +212,6 @@ if st.checkbox("💾 Visualizza Analisi Storica"):
             st.info("Nessun dato presente nello storico. Effettua il primo salvataggio!")
     except Exception as e:
         st.warning(f"Non è stato possibile caricare lo storico: {e}")
+
 
 
