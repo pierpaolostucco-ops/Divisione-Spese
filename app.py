@@ -8,8 +8,8 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Divisione Spese", page_icon="⚖️", layout="wide")
 
 # --- CONNESSIONE GOOGLE SHEETS ---
-# Sostituisci l'URL qui sotto con quello del tuo foglio
-url = "INSERISCI_QUI_IL_TUO_URL_DI_GOOGLE_SHEETS"
+# Assicurati di aver messo l'URL corretto o di usare i Secrets
+url = "IL_TUO_URL_DI_GOOGLE_SHEETS" 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 st.title("⚖️ Divisione Spese (Pierpaolo & Martina)")
@@ -18,53 +18,57 @@ st.markdown("---")
 # --- SIDEBAR: INPUT ---
 with st.sidebar:
     st.header("📅 Periodo")
-    anno = st.selectbox("Anno", [2025, 2026, 2027, 2028], index=1)
-    mese = st.selectbox("Mese", ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", 
-                                 "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"],
-                        index=datetime.now().month - 1)
+    sel_anno = st.selectbox("Anno", [2025, 2026, 2027, 2028], index=1, key="select_anno")
+    sel_mese = st.selectbox("Mese", ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", 
+                                     "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"],
+                            index=datetime.now().month - 1, key="select_mese")
     
     st.divider()
     st.subheader("👨 Pierpaolo")
-    stip_p = st.number_input("Stipendio Base (€)", min_value=0.0, value=2000.0)
-    bonus_p = st.number_input("Bonus / Extra (€)", min_value=0.0, value=0.0)
-    tot_p = stip_p + bonus_p
+    val_stip_p = st.number_input("Stipendio Base (€)", min_value=0.0, value=2000.0, key="input_stip_p")
+    val_bonus_p = st.number_input("Bonus / Extra (€)", min_value=0.0, value=0.0, key="input_bonus_p")
+    tot_p = val_stip_p + val_bonus_p
 
     st.subheader("👩 Martina")
-    stip_m = st.number_input("Stipendio Base (€)", min_value=0.0, value=1500.0)
-    bonus_m = st.number_input("Bonus / Extra (€)", min_value=0.0, value=0.0)
-    tot_m = stip_m + bonus_m
+    val_stip_m = st.number_input("Stipendio Base (€)", min_value=0.0, value=1500.0, key="input_stip_m")
+    val_bonus_m = st.number_input("Bonus / Extra (€)", min_value=0.0, value=0.0, key="input_bonus_m")
+    tot_m = val_stip_m + val_bonus_m
 
 # --- CALCOLI ---
 tot_entrate = tot_p + tot_m
-p_p = tot_p / tot_entrate if tot_entrate > 0 else 0.5
-p_m = tot_m / tot_entrate if tot_entrate > 0 else 0.5
+if tot_entrate > 0:
+    p_p = tot_p / tot_entrate
+    p_m = tot_m / tot_entrate
+else:
+    p_p = p_m = 0.5
 
 # --- SEZIONE SPESE ---
-st.header(f"📊 Spese di {mese} {anno}")
+st.header(f"📊 Spese di {sel_mese} {sel_anno}")
 col_input, col_graph = st.columns(2)
 
 with col_input:
-    mutuo = st.number_input("Mutuo / Affitto (€)", value=800.0)
-    bollette = st.number_input("Bollette (€)", value=150.0)
-    cibo = st.number_input("Spesa (€)", value=300.0)
-    extra = st.number_input("Altro (€)", value=50.0)
-    tot_spese = mutuo + bollette + cibo + extra
+    val_mutuo = st.number_input("Mutuo / Affitto (€)", value=800.0, key="input_mutuo")
+    val_bollette = st.number_input("Bollette (€)", value=150.0, key="input_bollette")
+    val_cibo = st.number_input("Spesa (€)", value=300.0, key="input_cibo")
+    val_extra = st.number_input("Altro (€)", value=50.0, key="input_extra")
+    tot_spese = val_mutuo + val_bollette + val_cibo + val_extra
 
 quota_p = tot_spese * p_p
 quota_m = tot_spese * p_m
 
 with col_graph:
     df_pie = pd.DataFrame({"Persona": ["Pierpaolo", "Martina"], "Quota": [quota_p, quota_m]})
-    fig = px.pie(df_pie, values='Quota', names='Persona', color_discrete_sequence=['#1E88E5', '#D81B60'], hole=.4)
-    st.plotly_chart(fig)
+    fig = px.pie(df_pie, values='Quota', names='Persona', 
+                 color_discrete_sequence=['#1E88E5', '#D81B60'], hole=.4)
+    st.plotly_chart(fig, use_container_width=True)
 
 # --- BOTTONE SALVATAGGIO ---
 st.divider()
-if st.button("💾 Salva i dati su Google Sheets"):
+if st.button("💾 Salva i dati su Google Sheets", key="btn_save"):
     nuova_riga = pd.DataFrame([{
         "Data_Salvataggio": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "Anno": anno,
-        "Mese": mese,
+        "Anno": sel_anno,
+        "Mese": sel_mese,
         "Pierpaolo_Tot": tot_p,
         "Martina_Tot": tot_m,
         "Spese_Tot": tot_spese,
@@ -72,12 +76,17 @@ if st.button("💾 Salva i dati su Google Sheets"):
         "Quota_M": quota_m
     }])
     
-    # Legge dati esistenti e concatena
-    existing_data = conn.read(spreadsheet=url, worksheet="Dati")
-    updated_df = pd.concat([existing_data, nuova_riga], ignore_index=True)
-    conn.update(spreadsheet=url, worksheet="Dati", data=updated_df)
-    st.success(f"Dati di {mese} {anno} salvati con successo!")
+    try:
+        existing_data = conn.read(spreadsheet=url, worksheet="Dati")
+        updated_df = pd.concat([existing_data, nuova_riga], ignore_index=True)
+        conn.update(spreadsheet=url, worksheet="Dati", data=updated_df)
+        st.success(f"Dati di {sel_mese} {sel_anno} salvati con successo!")
+    except Exception as e:
+        st.error(f"Errore durante il salvataggio: {e}")
 
 # Mostra lo storico
-if st.checkbox("Mostra storico salvato"):
-    st.dataframe(conn.read(spreadsheet=url, worksheet="Dati"))
+if st.checkbox("Mostra storico salvato", key="check_history"):
+    try:
+        st.dataframe(conn.read(spreadsheet=url, worksheet="Dati"))
+    except:
+        st.warning("Nessun dato trovato nel foglio 'Dati'.")
