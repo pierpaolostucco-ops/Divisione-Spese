@@ -5,6 +5,40 @@ import plotly.graph_objects as go
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
+# 7. SALVATAGGIO (Versione Blindata per errore 400)
+st.write("")
+if st.button("🚀 SALVA DATI SU GOOGLE SHEETS", use_container_width=True):
+    # Creiamo un dizionario pulito
+    dati_da_salvare = {
+        "Data": datetime.now().strftime("%d/%m/%Y"),
+        "Anno": int(sel_anno), 
+        "Mese": str(sel_mese),
+        "Spese_Tot": float(tot_spese), 
+        "Quota_P": float(q_p), 
+        "Quota_M": float(q_m)
+    }
+    
+    nuova_riga = pd.DataFrame([dati_da_salvare])
+    
+    try:
+        # Legge i dati esistenti
+        existing_data = conn.read(spreadsheet=url, worksheet="Dati")
+        
+        # Se il foglio è vuoto o ha colonne diverse, ricreiamo il DataFrame
+        if existing_data.empty:
+            updated_df = nuova_riga
+        else:
+            updated_df = pd.concat([existing_data, nuova_riga], ignore_index=True)
+        
+        # Carica il file aggiornato
+        conn.update(spreadsheet=url, worksheet="Dati", data=updated_df)
+        
+        st.balloons()
+        st.success(f"Dati di {sel_mese} salvati!")
+    except Exception as e:
+        st.error(f"Errore 400? Controlla che le intestazioni sul foglio Google siano: Data, Anno, Mese, Spese_Tot, Quota_P, Quota_M")
+        st.info(f"Dettaglio errore: {e}")
+
 # 1. CONFIGURAZIONE PAGINA
 st.set_page_config(page_title="Divisione Spese Casa", page_icon="⚖️", layout="wide")
 
@@ -167,3 +201,4 @@ if st.checkbox("💾 Visualizza Analisi Storica"):
             st.info("Nessun dato presente nello storico. Effettua il primo salvataggio!")
     except Exception as e:
         st.warning(f"Non è stato possibile caricare lo storico: {e}")
+
