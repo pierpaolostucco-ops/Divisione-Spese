@@ -9,14 +9,15 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Divisione Spese Casa", page_icon="⚖️", layout="wide")
 
 # 2. CONNESSIONE GOOGLE SHEETS
+# Utilizziamo un blocco try per assicurarci che i Secrets siano configurati
 try:
     url = st.secrets["connections"]["gsheets"]["spreadsheet"]
     conn = st.connection("gsheets", type=GSheetsConnection)
-except:
-    st.error("Configura l'URL nei Secrets di Streamlit!")
+except Exception as e:
+    st.error("⚠️ Errore di configurazione: Assicurati di aver inserito l'URL nei Secrets di Streamlit.")
     st.stop()
 
-# 3. SIDEBAR - INPUT
+# 3. SIDEBAR - INPUT STIPENDI
 with st.sidebar:
     st.header("📅 Periodo")
     sel_anno = st.selectbox("Anno", [2025, 2026, 2027, 2028], index=1, key="s_anno")
@@ -26,13 +27,13 @@ with st.sidebar:
     
     st.divider()
     st.subheader("👨 Pierpaolo")
-    st_p = st.number_input("Stipendio Base (€)", value=2000.0, key="val_st_p")
-    bo_p = st.number_input("Bonus (€)", value=0.0, key="val_bo_p")
+    st_p = st.number_input("Stipendio Base (€)", min_value=0.0, value=2000.0, key="val_st_p")
+    bo_p = st.number_input("Bonus (€)", min_value=0.0, value=0.0, key="val_bo_p")
     tot_p = st_p + bo_p
 
     st.subheader("👩 Martina")
-    st_m = st.number_input("Stipendio Base (€)", value=1500.0, key="val_st_m")
-    bo_m = st.number_input("Bonus (€)", value=0.0, key="val_bo_m")
+    st_m = st.number_input("Stipendio Base (€)", min_value=0.0, value=1500.0, key="val_st_m")
+    bo_m = st.number_input("Bonus (€)", min_value=0.0, value=0.0, key="val_bo_m")
     tot_m = st_m + bo_m
 
 # 4. CALCOLO PERCENTUALI
@@ -42,7 +43,7 @@ p_m = tot_m / tot_entrate if tot_entrate > 0 else 0.5
 
 # 5. LAYOUT PRINCIPALE
 st.title("⚖️ Divisione Spese")
-st.subheader(f"Resoconto {sel_mese} {sel_anno}")
+st.markdown(f"### Resoconto di **{sel_mese} {sel_anno}**")
 
 col_in, col_pie = st.columns([1.2, 1])
 
@@ -61,44 +62,108 @@ with col_in:
         v_ext = st.number_input("📦 Altro", value=0.0)
     
     tot_spese = v_mu + v_ele + v_met + v_acq + v_tar + v_int + v_cib + v_ext
-    st.info(f"**Totale Spese Comuni: {tot_spese:.2f} €**")
+    st.info(f"**Totale Spese Comuni calcolato: {tot_spese:.2f} €**")
 
+# Calcolo quote finali
 q_p = tot_spese * p_p
 q_m = tot_spese * p_m
 
 with col_pie:
-    st.write("### 📊 Ripartizione")
+    st.write("### 📊 Ripartizione Quote")
     df_pie = pd.DataFrame({"Chi": ["Pierpaolo", "Martina"], "Quota": [q_p, q_m]})
     fig_pie = px.pie(df_pie, values='Quota', names='Chi', hole=.4,
-                     color_discrete_sequence=['#1f77b4', '#d62728']) # Blu e Rosso standard
+                     color_discrete_sequence=['#1f77b4', '#d62728'])
+    fig_pie.update_layout(margin=dict(t=30, b=0, l=0, r=0))
     st.plotly_chart(fig_pie, width="stretch")
 
-# 6. RIEPILOGO VERSAMENTI
+# 6. RIEPILOGO VERSAMENTI (Stile pulito con metriche)
 st.divider()
-st.write("### 🏁 Quote da versare sul conto comune")
+st.write("### 🏁 Quote da versare")
 r1, r2 = st.columns(2)
 
 with r1:
-    st.metric(label="👨 Quota Pierpaolo", value=f"{q_p:.2f} €", delta=f"{p_p:.1%} del totale")
-    with st.expander("Dettaglio Pierpaolo"):
-        st.write(f"Mutuo: {v_mu*p_p:.2f}€ | Cibo: {v_cib*p_p:.2f}€ | Bollette: {(v_ele+v_met+v_acq)*p_p:.2f}€")
+    st.metric(label="👨 Quota Pierpaolo", value=f"{q_p:.2f} €", delta=f"{p_p:.1%} del peso totale")
+    with st.expander("Dettaglio quote Pierpaolo"):
+        st.write(f"🏠 Mutuo: {v_mu*p_p:.2f} €")
+        st.write(f"🛒 Spesa: {v_cib*p_p:.2f} €")
+        st.write(f"🔌 Bollette: {(v_ele+v_met+v_acq+v_int+v_tar)*p_p:.2f} €")
 
 with r2:
-    st.metric(label="👩 Quota Martina", value=f"{q_m:.2f} €", delta=f"{p_m:.1%} del totale")
-    with st.expander("Dettaglio Martina"):
-        st.write(f"Mutuo: {v_mu*p_m:.2f}€ | Cibo: {v_cib*p_m:.2f}€ | Bollette: {(v_ele+v_met+v_acq)*p_m:.2f}€")
+    st.metric(label="👩 Quota Martina", value=f"{q_m:.2f} €", delta=f"{p_m:.1%} del peso totale")
+    with st.expander("Dettaglio quote Martina"):
+        st.write(f"🏠 Mutuo: {v_mu*p_m:.2f} €")
+        st.write(f"🛒 Spesa: {v_cib*p_m:.2f} €")
+        st.write(f"🔌 Bollette: {(v_ele+v_met+v_acq+v_int+v_tar)*p_m:.2f} €")
 
-# 7. SALVATAGGIO
+# 7. SALVATAGGIO (Blocco Try/Except super sicuro)
 st.write("")
-if st.button("💾 SALVA MESE SU GOOGLE SHEETS", use_container_width=True):
+if st.button("🚀 SALVA DATI SU GOOGLE SHEETS", use_container_width=True):
     nuova_riga = pd.DataFrame([{
         "Data": datetime.now().strftime("%d/%m/%Y"),
-        "Anno": sel_anno, "Mese": sel_mese,
-        "Spese_Tot": tot_spese, "Quota_P": q_p, "Quota_M": q_m
+        "Anno": sel_anno, 
+        "Mese": sel_mese,
+        "Spese_Tot": tot_spese, 
+        "Quota_P": q_p, 
+        "Quota_M": q_m
     }])
+    
     try:
-        existing = conn.read(spreadsheet=url, worksheet="Dati")
-        updated = pd.concat([existing, nuova_riga], ignore_index=True)
-        conn.update(spreadsheet=url, worksheet="Dati", data=updated)
+        # Legge i dati esistenti
+        existing_data = conn.read(spreadsheet=url, worksheet="Dati")
+        # Concatena il nuovo record
+        updated_df = pd.concat([existing_data, nuova_riga], ignore_index=True)
+        # Carica il file aggiornato
+        conn.update(spreadsheet=url, worksheet="Dati", data=updated_df)
+        
         st.balloons()
-        st.success
+        st.success(f"Dati di {sel_mese} salvati correttamente!")
+    except Exception as e:
+        st.error(f"Si è verificato un errore durante il salvataggio: {e}")
+
+# 8. ANALISI STORICA E GRAFICO COMBINATO
+st.divider()
+if st.checkbox("💾 Visualizza Analisi Storica"):
+    try:
+        df_history = conn.read(spreadsheet=url, worksheet="Dati")
+        if not df_history.empty:
+            st.write("### 📈 Andamento Mensile")
+            
+            # Grafico con barre per le quote e linea per il totale
+            fig_history = go.Figure()
+
+            # Barre Pierpaolo
+            fig_history.add_trace(go.Bar(
+                x=df_history['Mese'] + " " + df_history['Anno'].astype(str),
+                y=df_history['Quota_P'], name='Quota Pierpaolo', marker_color='#1f77b4'
+            ))
+
+            # Barre Martina
+            fig_history.add_trace(go.Bar(
+                x=df_history['Mese'] + " " + df_history['Anno'].astype(str),
+                y=df_history['Quota_M'], name='Quota Martina', marker_color='#d62728'
+            ))
+
+            # Linea Totale Spese
+            fig_history.add_trace(go.Scatter(
+                x=df_history['Mese'] + " " + df_history['Anno'].astype(str),
+                y=df_history['Spese_Tot'], name='Totale Spese',
+                line=dict(color='#2ca02c', width=3, dash='solid'),
+                mode='lines+markers'
+            ))
+
+            fig_history.update_layout(
+                barmode='group',
+                xaxis_title="Mese",
+                yaxis_title="Euro (€)",
+                legend_title="Legenda",
+                hovermode="x unified"
+            )
+            
+            st.plotly_chart(fig_history, width="stretch")
+            
+            st.write("### 📄 Tabella Storica")
+            st.dataframe(df_history, width="stretch")
+        else:
+            st.info("Nessun dato presente nello storico. Effettua il primo salvataggio!")
+    except Exception as e:
+        st.warning(f"Non è stato possibile caricare lo storico: {e}")
