@@ -5,126 +5,163 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # 1. CONFIGURAZIONE PAGINA
-st.set_page_config(page_title="Divisione Spese PRO", page_icon="⚖️", layout="wide")
+st.set_page_config(page_title="Divisione Spese", page_icon="⚖️", layout="wide")
 
-# 2. STILE CSS "DARK PRO"
+# 2. STILE CSS "LIGHT MODERNO"
 st.markdown("""
     <style>
-    .stApp { background-color: #0E1117; color: #E0E0E0; }
-    [data-testid="stSidebar"] { background-color: #161B22; border-right: 1px solid #30363D; }
-    .dark-card { background-color: #1C2128; padding: 20px; border-radius: 12px; border: 1px solid #30363D; margin-bottom: 20px; }
-    .stNumberInput div div input { background-color: #0D1117 !important; color: white !important; border: 1px solid #30363D !important; }
+    .main { background-color: #F0F2F5; }
     .stButton>button {
         width: 100%;
-        border-radius: 8px;
-        background: linear-gradient(90deg, #00C6FF 0%, #0072FF 100%);
-        color: white; font-weight: bold; border: none; padding: 10px; transition: 0.3s;
+        border-radius: 10px;
+        background-color: #007AFF;
+        color: white;
+        font-weight: bold;
+        border: none;
+        height: 3em;
     }
-    .stButton>button:hover { box-shadow: 0 0 15px rgba(0, 198, 255, 0.5); color: white; }
+    .result-card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        margin-bottom: 20px;
+        border: 1px solid #EAEAEA;
+    }
+    h1, h2, h3 { color: #1C1C1E; }
     </style>
     """, unsafe_allow_html=True)
 
 # 3. CONNESSIONE GOOGLE SHEETS
-# L'URL viene preso dai Secrets se non specificato qui
-url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-conn = st.connection("gsheets", type=GSheetsConnection)
+# Prende l'URL direttamente dai Secrets
+try:
+    url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+    conn = st.connection("gsheets", type=GSheetsConnection)
+except:
+    st.error("Configura l'URL nei Secrets di Streamlit!")
+    st.stop()
 
-# 4. SIDEBAR - INPUT STIPENDI
+# 4. SIDEBAR - INPUT
 with st.sidebar:
-    st.title("⚙️ Setup")
     st.header("📅 Periodo")
-    sel_anno = st.selectbox("Anno", [2025, 2026, 2027, 2028], index=1, key="select_anno")
+    sel_anno = st.selectbox("Anno", [2025, 2026, 2027, 2028], index=1, key="s_anno")
     sel_mese = st.selectbox("Mese", ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", 
                                      "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"],
-                            index=datetime.now().month - 1, key="select_mese")
+                            index=datetime.now().month - 1, key="s_mese")
     
     st.divider()
     st.subheader("👨 Pierpaolo")
-    val_stip_p = st.number_input("Stipendio Base (€)", min_value=0.0, value=2000.0, key="input_stip_p")
-    val_bonus_p = st.number_input("Bonus / Extra (€)", min_value=0.0, value=0.0, key="input_bonus_p")
-    tot_p = val_stip_p + val_bonus_p
+    st_p = st.number_input("Stipendio Base (€)", value=2000.0, key="val_st_p")
+    bo_p = st.number_input("Bonus (€)", value=0.0, key="val_bo_p")
+    tot_p = st_p + bo_p
 
     st.subheader("👩 Martina")
-    val_stip_m = st.number_input("Stipendio Base (€)", min_value=0.0, value=1500.0, key="input_stip_m")
-    val_bonus_m = st.number_input("Bonus / Extra (€)", min_value=0.0, value=0.0, key="input_bonus_m")
-    tot_m = val_stip_m + val_bonus_m
+    st_m = st.number_input("Stipendio Base (€)", value=1500.0, key="val_st_m")
+    bo_m = st.number_input("Bonus (€)", value=0.0, key="val_bo_m")
+    tot_m = st_m + bo_m
 
 # 5. CALCOLO PERCENTUALI
 tot_entrate = tot_p + tot_m
 p_p = tot_p / tot_entrate if tot_entrate > 0 else 0.5
 p_m = tot_m / tot_entrate if tot_entrate > 0 else 0.5
 
-# 6. HEADER DASHBOARD
-st.title("⚖️ Divisione Spese (Pierpaolo & Martina)")
-st.markdown(f"#### 📊 Dashboard di {sel_mese} {sel_anno}")
+# 6. LAYOUT CENTRALE
+st.title("⚖️ Divisione Spese")
+st.markdown(f"### {sel_mese} {sel_anno}")
 
-# 7. SEZIONE SPESE
-col_input, col_graph = st.columns([1.2, 1])
+col_in, col_pie = st.columns([1.2, 1])
 
-with col_input:
-    st.markdown('<div class="dark-card">', unsafe_allow_html=True)
-    st.subheader("📝 Inserimento Costi")
+with col_in:
+    st.markdown('<div class="result-card">', unsafe_allow_html=True)
+    st.subheader("📝 Inserimento Spese")
     c1, c2 = st.columns(2)
     with c1:
-        val_mutuo = st.number_input("🏠 Mutuo / Affitto", value=800.0, key="in_mutuo")
-        val_ele = st.number_input("⚡ Elettricità", value=60.0, key="in_ele")
-        val_metano = st.number_input("🔥 Metano", value=80.0, key="in_met")
-        val_acqua = st.number_input("💧 Acqua", value=30.0, key="in_acq")
+        v_mu = st.number_input("🏠 Mutuo", value=800.0)
+        v_el = st.number_input("⚡ Elettricità", value=60.0)
+        v_me = st.number_input("🔥 Metano", value=80.0)
+        v_ac = st.number_input("💧 Acqua", value=30.0)
     with c2:
-        val_tari = st.number_input("🗑️ TARI", value=0.0, key="in_tari")
-        val_internet = st.number_input("🌐 Internet", value=30.0, key="in_int")
-        val_cibo = st.number_input("🛒 Spesa Alimentare", value=300.0, key="in_cibo")
-        val_extra = st.number_input("📦 Altre Spese", value=0.0, key="in_extra")
+        v_ta = st.number_input("🗑️ TARI", value=0.0)
+        v_it = st.number_input("🌐 Internet", value=30.0)
+        v_ci = st.number_input("🛒 Spesa", value=300.0)
+        v_ex = st.number_input("📦 Altro", value=0.0)
     
-    tot_spese = val_mutuo + val_ele + val_metano + val_acqua + val_tari + val_internet + val_cibo + val_extra
-    st.markdown(f"**TOTALE SPESE COMUNI: {tot_spese:.2f} €**")
+    tot_spese = v_mu + v_el + v_me + v_ac + v_ta + v_it + v_ci + v_ex
+    st.markdown(f"**Totale da dividere: {tot_spese:.2f} €**")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 8. CALCOLO QUOTE DETTAGLIATE
-tot_quota_p = tot_spese * p_p
-tot_quota_m = tot_spese * p_m
+q_p = tot_spese * p_p
+q_m = tot_spese * p_m
 
-with col_graph:
-    st.subheader("📈 Proporzione")
-    df_pie = pd.DataFrame({"Persona": ["Pierpaolo", "Martina"], "Quota": [tot_quota_p, tot_quota_m]})
-    fig = px.pie(df_pie, values='Quota', names='Persona', color_discrete_sequence=['#58A6FF', '#FF7B72'], hole=.6)
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', font_color="white", showlegend=True, margin=dict(t=0,b=0,l=0,r=0))
-    # AGGIORNATO: Usiamo width="stretch" come richiesto dalle nuove versioni
-    st.plotly_chart(fig, width="stretch")
+with col_pie:
+    df_pie = pd.DataFrame({"Chi": ["Pierpaolo", "Martina"], "Quota": [q_p, q_m]})
+    fig_pie = px.pie(df_pie, values='Quota', names='Chi', hole=.5,
+                     color_discrete_sequence=['#007AFF', '#FF2D55'])
+    fig_pie.update_layout(margin=dict(t=20, b=0, l=0, r=0))
+    st.plotly_chart(fig_pie, width="stretch")
 
-# 9. RIEPILOGO VERSAMENTI
+# 7. RIEPILOGO VERSAMENTI
 st.divider()
-c1, c2 = st.columns(2)
+r1, r2 = st.columns(2)
 
-with c1:
-    st.markdown(f'<div class="dark-card" style="border-top: 4px solid #58A6FF;"><h3>👨 Pierpaolo</h3><h2>{tot_quota_p:.2f} €</h2></div>', unsafe_allow_html=True)
-    with st.expander("🔍 Dettaglio"):
-        st.write(f"🏠 Mutuo: {val_mutuo*p_p:.2f} €")
-        st.write(f"🛒 Spesa: {val_cibo*p_p:.2f} €")
-        # ... qui puoi aggiungere le altre voci se vuoi vederle tutte espanse
+with r1:
+    st.markdown(f'<div class="result-card" style="border-left: 5px solid #007AFF;">'
+                f'<h3>👨 Pierpaolo</h3>'
+                f'<h2>{q_p:.2f} €</h2>'
+                f'<p style="color:gray;">Sulla base di {p_p:.1%} delle entrate</p>'
+                f'</div>', unsafe_allow_html=True)
 
-with c2:
-    st.markdown(f'<div class="dark-card" style="border-top: 4px solid #FF7B72;"><h3>👩 Martina</h3><h2>{tot_quota_m:.2f} €</h2></div>', unsafe_allow_html=True)
-    with st.expander("🔍 Dettaglio"):
-        st.write(f"🏠 Mutuo: {val_mutuo*p_m:.2f} €")
-        st.write(f"🛒 Spesa: {val_cibo*p_m:.2f} €")
+with r2:
+    st.markdown(f'<div class="result-card" style="border-left: 5px solid #FF2D55;">'
+                f'<h3>👩 Martina</h3>'
+                f'<h2>{q_m:.2f} €</h2>'
+                f'<p style="color:gray;">Sulla base di {p_m:.1%} delle entrate</p>'
+                f'</div>', unsafe_allow_html=True)
 
-# 10. BOTTONE SALVATAGGIO
-st.divider()
-if st.button("🚀 Salva su Google Sheets", key="btn_save"):
+# 8. TASTO SALVATAGGIO
+if st.button("🚀 Salva Dati su Google Sheets"):
     nuova_riga = pd.DataFrame([{
-        "Data": datetime.now().strftime("%d/%m/%Y"), "Anno": sel_anno, "Mese": sel_mese,
-        "P_Tot": tot_p, "M_Tot": tot_m, "Spese": tot_spese, "Q_P": tot_quota_p, "Q_M": tot_quota_m
+        "Data": datetime.now().strftime("%d/%m/%Y"),
+        "Anno": sel_anno, "Mese": sel_mese,
+        "P_Tot": tot_p, "M_Tot": tot_m,
+        "Spese_Tot": tot_spese, "Quota_P": q_p, "Quota_M": q_m
     }])
     try:
         existing = conn.read(spreadsheet=url, worksheet="Dati")
         updated = pd.concat([existing, nuova_riga], ignore_index=True)
         conn.update(spreadsheet=url, worksheet="Dati", data=updated)
         st.balloons()
-        st.success("Dati salvati!")
+        st.success("Dati archiviati con successo!")
     except Exception as e:
         st.error(f"Errore: {e}")
 
-if st.checkbox("💾 Mostra storico"):
-    # AGGIORNATO: width="stretch" per la tabella
-    st.dataframe(conn.read(spreadsheet=url, worksheet="Dati"), width="stretch")
+# 9. STORICO E GRAFICO A BARRE
+st.divider()
+if st.checkbox("💾 Visualizza Storico e Analisi"):
+    try:
+        data_storico = conn.read(spreadsheet=url, worksheet="Dati")
+        
+        if not data_storico.empty:
+            st.subheader("📊 Confronto Mesi (Quota Pierpaolo vs Martina)")
+            
+            # Prepariamo i dati per il grafico a barre
+            # Trasformiamo il dataframe da "largo" a "lungo" per Plotly
+            df_melt = data_storico.melt(id_vars=['Mese', 'Anno'], 
+                                        value_vars=['Quota_P', 'Quota_M'],
+                                        var_name='Partner', value_name='Euro')
+            df_melt['Partner'] = df_melt['Partner'].replace({'Quota_P': 'Pierpaolo', 'Quota_M': 'Martina'})
+            df_melt['Periodo'] = df_melt['Mese'] + " " + df_melt['Anno'].astype(str)
+
+            fig_bar = px.bar(df_melt, x='Periodo', y='Euro', color='Partner',
+                             barmode='group', 
+                             color_discrete_map={'Pierpaolo': '#007AFF', 'Martina': '#FF2D55'},
+                             text_auto='.2s')
+            
+            st.plotly_chart(fig_bar, width="stretch")
+            
+            st.subheader("📄 Dettaglio Tabella")
+            st.dataframe(data_storico, width="stretch")
+        else:
+            st.info("Lo storico è ancora vuoto.")
+    except:
+        st.warning("Impossibile caricare lo storico.")
