@@ -8,7 +8,6 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Divisione Spese", page_icon="⚖️", layout="wide")
 
 # --- CONNESSIONE GOOGLE SHEETS ---
-# Assicurati di aver messo l'URL corretto o di usare i Secrets
 url = "IL_TUO_URL_DI_GOOGLE_SHEETS" 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -53,14 +52,32 @@ with col_input:
     val_extra = st.number_input("Altro (€)", value=50.0, key="input_extra")
     tot_spese = val_mutuo + val_bollette + val_cibo + val_extra
 
+# --- RISULTATI ---
 quota_p = tot_spese * p_p
 quota_m = tot_spese * p_m
+mutuo_p = val_mutuo * p_p
+mutuo_m = val_mutuo * p_m
 
 with col_graph:
     df_pie = pd.DataFrame({"Persona": ["Pierpaolo", "Martina"], "Quota": [quota_p, quota_m]})
     fig = px.pie(df_pie, values='Quota', names='Persona', 
                  color_discrete_sequence=['#1E88E5', '#D81B60'], hole=.4)
     st.plotly_chart(fig, use_container_width=True)
+
+# --- DETTAGLIO VERSAMENTI ---
+st.divider()
+st.subheader("📌 Quanto versare sul conto comune")
+c1, c2 = st.columns(2)
+
+with c1:
+    st.info(f"### 👨 Pierpaolo\n"
+            f"**Totale da versare: {quota_p:.2f} €**\n\n"
+            f"Quota per il Mutuo: **{mutuo_p:.2f} €**")
+
+with c2:
+    st.error(f"### 👩 Martina\n"
+             f"**Totale da versare: {quota_m:.2f} €**\n\n"
+             f"Quota per il Mutuo: **{mutuo_m:.2f} €**")
 
 # --- BOTTONE SALVATAGGIO ---
 st.divider()
@@ -84,7 +101,6 @@ if st.button("💾 Salva i dati su Google Sheets", key="btn_save"):
     except Exception as e:
         st.error(f"Errore durante il salvataggio: {e}")
 
-# Mostra lo storico
 if st.checkbox("Mostra storico salvato", key="check_history"):
     try:
         st.dataframe(conn.read(spreadsheet=url, worksheet="Dati"))
